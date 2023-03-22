@@ -118,7 +118,7 @@ spec:
           image: skull/lost_island_backend
           env:
             - name: SPRING_DATASOURCE_URL
-              value: jdbc:mysql://mysql-service.lost_island.svc.cluster.local:3306/lost_island?serverTimezone=UTC&sessionVariables=sql_mode='NO_ENGINE_SUBSTITUTION'&jdbcCompliantTruncation=false&useSSL=false
+              value: jdbc:mysql://mysql-service:3306/lost_island?serverTimezone=UTC&sessionVariables=sql_mode='NO_ENGINE_SUBSTITUTION'&jdbcCompliantTruncation=false&useSSL=false
             - name: SPRING_DATASOURCE_USERNAME
               value: root
             - name: SPRING_DATASOURCE_PASSWORD
