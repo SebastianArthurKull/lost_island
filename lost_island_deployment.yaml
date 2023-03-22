@@ -1,0 +1,212 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lost_island
+
+# lost_island_mysql
+
+---
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mysql-pv-volume
+  labels:
+    type: local
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/data"
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pv-claim
+  namespace: lost_island
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lost_island_mysql
+  namespace: lost_island
+  labels:
+    app: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:latest
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: 1234
+            - name: MYSQL_DATABASE
+              value: lost_island
+            - name: MYSQL_PASSWORD
+              value: 1234
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: mysql-persistent-storage
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-persistent-storage
+          persistentVolumeClaim:
+            claimName: mysql-pv-claim
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service
+  namespace: lost_island
+spec:
+  selector:
+    app: mysql
+  ports:
+    - name: mysql-port
+      port: 3306
+      targetPort: 3306
+  type: NodePort
+
+# lost_island_backend
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lost_island_backend
+  namespace: lost_island
+  labels:
+    app: springboot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: springboot
+  template:
+    metadata:
+      labels:
+        app: springboot
+    spec:
+      containers:
+        - name: springboot-app
+          image: skull/lost_island_backend
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:mysql://mysql-service:3306/lost_island?serverTimezone=UTC&sessionVariables=sql_mode='NO_ENGINE_SUBSTITUTION'&jdbcCompliantTruncation=false&useSSL=false
+            - name: SPRING_DATASOURCE_USERNAME
+              value: root
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: 1234
+          ports:
+            - containerPort: 8080
+            - containerPort: 9092
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: lost_island
+spec:
+  selector:
+    app: springboot
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: LoadBalancer
+
+# lost_island_frontend
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lost_island_frontend
+  namespace: lost_island
+  labels:
+    app: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: skull/lost_island_frontend
+          env:
+            - name: SOCKET_URL
+              value: "lost-island-backend.lost-island.svc.cluster.local"
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+          volumeMounts:
+            - name: frontend-persistent-storage
+              mountPath: /frontend/node_modules
+      volumes:
+        - name: frontend-persistent-storage
+          persistentVolumeClaim:
+            claimName: frontend-pv-claim
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: lost_island
+spec:
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 3000
+  type: LoadBalancer
+
