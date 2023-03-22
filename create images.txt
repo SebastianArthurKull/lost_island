@@ -1,3 +1,4 @@
+# do this
 cd lost_island_frontend
 podman build -t skull/lost_island_frontend .
 
